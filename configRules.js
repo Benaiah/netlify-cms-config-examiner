@@ -25,17 +25,19 @@ const matchPatternsToPath = curry((patterns, path) => patterns.length === path.l
   }, true),
 )(patterns, path));
 
-const test = {
-  atPath: path => (config, currentPath) => equals(path, currentPath),
-  pathEndsWith: path => (config, currentPath) => endsWith(path, currentPath),
-  hasPath: path => config => !!pathOr(false, path, config),
-  matchPath: patterns => (config, path) => matchPatternsToPath(patterns, path),
-  pathEndsWithMatch: patterns => (config, path) => matchPatternsToPath(patterns, takeLast(patterns.length, path)),
-};
+const isNonEmptyList = both(is(Array), pipe(length, lt(0)));
+
+const atPath = path => (config, currentPath) => equals(path, currentPath);
+const pathEndsWith = path => (config, currentPath) => endsWith(path, currentPath);
+const hasPath = path => config => !!pathOr(false, path, config);
+const matchPath = patterns => (config, path) => matchPatternsToPath(patterns, path);
+const pathEndsWithMatch = patterns => (config, path) => matchPatternsToPath(patterns, takeLast(patterns.length, path));
+const hasProps = props => config => map(flip(has)(config), props);
+const propIsNonEmptyList = prop => config => both(has(prop, config), isNonEmptyList(prop));
 
 const backendExists = rules.error({
   name: 'backendExists',
-  match: test.atPath([]),
+  match: atPath([]),
   test: has('backend'),
   failure: () => 'The config should have backend settings!',
   fix: obj => set(lensProp('backend'), { name: '<backend-type>', repo: '<your-username/your-repo>' }, obj),
@@ -44,7 +46,7 @@ const backendExists = rules.error({
 
 const backendTypeSupported = rules.error({
   name: 'backendTypeSupported',
-  match: test.atPath(['backend']),
+  match: atPath(['backend']),
   test: both(
     has('name'),
     obj => ['git-gateway', 'github', 'test-repo'].includes(obj.name)
@@ -56,7 +58,7 @@ const backendTypeSupported = rules.error({
 const validateGithubBackend = rules.error({
   name: 'validateGithubBackend',
   match: allPass([
-    test.atPath(['backend']),
+    atPath(['backend']),
     has('name'),
     propEq('name', 'github'),
   ]),
@@ -78,7 +80,7 @@ const unnecessaryDomainSettings = ['api_root', 'site_domain', 'base_url'];
 const noUnnecessaryDomainSettings = rules.warning({
   name: 'noUnnecessaryDomainSettings',
   match: allPass([
-    test.atPath(['backend']),
+    atPath(['backend']),
     anyPass(map(has, unnecessaryDomainSettings)),
   ]),
   test: anyPass(map(
@@ -91,10 +93,9 @@ const noUnnecessaryDomainSettings = rules.warning({
 
 const hasAtLeastOneCollection = rules.error({
   name: 'hasAtLeastOneCollection',
-  match: test.atPath([]),
+  match: atPath([]),
   test: allPass([
     has('collections'),
-    o => console.log(pipe(prop('collections'), length))|| true,
     pipe(prop('collections'), length, lt(0)),
   ]),
     failure: always('There are no "collections" defined!'),
@@ -104,7 +105,7 @@ const hasAtLeastOneCollection = rules.error({
 const requiredCollectionProps = ['name', 'label'];
 const collectionHasRequiredProps = rules.error({
   name: 'collectionHasRequiredProps',
-  match: test.matchPath(['collections', '*']),
+  match: matchPath(['collections', '*']),
   test: allPass(map(has, requiredCollectionProps)),
   failure: always(`Collection does not have required settings: ${requiredCollectionProps.join(", ")}!`),
   success: always(`Collection has required settings: ${requiredCollectionProps.join(", ")}.`),
@@ -113,7 +114,7 @@ const collectionHasRequiredProps = rules.error({
 
 const collectionIsFolderOrFilesCollection = rules.error({
   name: 'collectionIsFolderOrFilesCollection',
-  match: test.matchPath(['collections', '*']),
+  match: matchPath(['collections', '*']),
   test: anyPass([
     both(has('files')),
     both(has('folder'), has('fields')),
@@ -131,7 +132,7 @@ const requiredFieldProps = ['name', 'label', 'widget'];
 const fieldHasRequiredProps = rules.error({
   name: 'fieldHasRequiredProps',
   match: isFieldDefinition,
-  test: allPass(map(has, requiredFieldProps)),
+  test: hasProps(requiredFieldProps),
   failure: o => {
     const unsetFieldProps = map(flip(has)(o), requiredFieldProps);
     return `Field is missing required props: ${unsetFieldProps.join(', ')}`;
