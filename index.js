@@ -2,6 +2,7 @@ const fs = require('fs');
 const { inspect, promisify } = require('util');
 const yaml = require('js-yaml');
 const chalk = require('chalk');
+const minimist = require('minimist');
 const {
   allPass, always, anyPass, both, call, chain, cond, curry, concat,
   equals, flatten, flip, gt, has, join, keys, length, lensIndex,
@@ -46,8 +47,11 @@ const printLogsForTerminal = pipe(
   join('\n\n')
 );
 
+const argv = minimist(process.argv.slice(2));
+const file = argv._[0] || "../netlify-cms/example/config.yml";
+
 const readFile = promisify(fs.readFile);
-const configPromise = readFile("../netlify-cms/example/config.yml", { encoding: 'utf8' })
+const configPromise = readFile(file, { encoding: 'utf8' })
   .then(yaml.safeLoad)
   .then(examine)
   .then(printLogsForTerminal)
