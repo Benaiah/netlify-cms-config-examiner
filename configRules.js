@@ -125,25 +125,30 @@ const collectionIsFolderOrFilesCollection = rules.error({
   ]),
 });
 
+const isFieldDefinition = test.pathEndsWithMatch(['fields', '*']);
+
 const requiredFieldProps = ['name', 'label', 'widget'];
 const fieldHasRequiredProps = rules.error({
   name: 'fieldHasRequiredProps',
-  match: test.pathEndsWithMatch(['fields', '*']),
+  match: isFieldDefinition,
   test: allPass(map(has, requiredFieldProps)),
-  failure: always(`Field is missing one of its required props: ${requiredFieldProps.join(', ')}!`),
+  failure: o => {
+    const unsetFieldProps = map(flip(has)(o), requiredFieldProps);
+    return `Field is missing required props: ${unsetFieldProps.join(', ')}`;
+  },
   success: always(`Field has required props: ${requiredFieldProps.join(', ')}`),
 });
 
 const selectWidgetHasOptions = rules.error({
   name: 'selectWidgetHasOptions',
   match: allPass([
-    test.pathEndsWithMatch(['fields', '*']),
+    isFieldDefinition,
     propEq('widget', 'select'),
   ]),
   test: both(has('options'), pipe(prop('options'), is(Array))),
   failure: always('"select" widget does not have an "options" array!'),
   success: always('"select" widget has an "options" array.'),
-})
+});
 
 module.exports = [
   backendExists,
