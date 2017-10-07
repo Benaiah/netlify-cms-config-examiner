@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 const fs = require('fs');
 const { inspect, promisify } = require('util');
 const yaml = require('js-yaml');
@@ -20,7 +22,7 @@ const examine = (config, path=[]) => {
   return flatten([...rulesResults, ...map(propName => examine(config[propName], [...path, propName]), keys(config))]);
 };
 
-const printLogsForTerminal = pipe(
+const prettyPrint = pipe(
   map(({ name, path, message, type }) =>
     [type, `root${ path.length > 0 ? "." + path.join('.') : '' }/${ name }`, message]
   ),
@@ -31,7 +33,7 @@ const printLogsForTerminal = pipe(
     )(logs);
     
     return map(
-      ([type, path, message]) => [type, path, '\n'+message],
+      ([type, path, message]) => [type, path, ('.'.repeat(maxPathLength+3-path.length))+message],
       logs,
     );
   },
@@ -44,16 +46,34 @@ const printLogsForTerminal = pipe(
     ])(type);
     return `${chalk.keyword(color)(path)}${message}`
   }),
-  join('\n\n')
+  join('\n')
 );
 
+const jsonPrint = JSON.stringify
+const jsonPrettyPrint = o => JSON.stringify(o, null, 2);
+const jsonLinesPrint = pipe(map(jsonPrint), join('\n'));
+
+const outputFunctions = {
+  pretty: prettyPrint,
+  json: jsonPrint,
+  ['json-pretty']: jsonPrettyPrint,
+  ['json-lines']: jsonLinesPrint,
+}
+
 const argv = minimist(process.argv.slice(2));
-const file = argv._[0] || "../netlify-cms/example/config.yml";
+const file = argv._[0];
+
+if (!file) {
+  console.error('You must pass a filename!');
+  process.exit(1);
+}
+
+const outputFunction = outputFunctions[(argv.output || argv.o)] || outputFunctions.pretty;
 
 const readFile = promisify(fs.readFile);
 const configPromise = readFile(file, { encoding: 'utf8' })
   .then(yaml.safeLoad)
   .then(examine)
-  .then(printLogsForTerminal)
+  .then(outputFunction)
   .then(console.log)
   .catch(console.error);
