@@ -2,11 +2,9 @@ const { chain, curry, flip, has, merge} = require('ramda');
 
 const run = curry((rules, config, path) => chain(rule => {
   if (!rule.match(config, path)) {
-    // console.log(`${path.join('.')}/${rule.name}: rule did not match`)
     return [];
   }
   if (rule.test(config, path)) {
-    // console.log(`${path.join('.')}/${rule.name}: rule succeeded`)
     return { name: rule.name, path, type: 'success', message: rule.success(config, path) };
   }
 
