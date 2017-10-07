@@ -71,7 +71,7 @@ const validateGithubBackend = rules.error({
       ? `"${obj.repo}" is not a valid repo name.`
       : 'The GitHub backend requires a "repo" setting.'
   }`,
-  success: obj => `Repo name is present, and "${obj.repo}" is a valid repo name.'` 
+  success: obj => `Repo name is present, and "${obj.repo}" is a valid repo name.` 
 });
 
 const containsNetlifyDomain = str => str.indexOf("netlify.com") !== -1
