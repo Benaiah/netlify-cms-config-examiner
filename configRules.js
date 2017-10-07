@@ -1,7 +1,7 @@
 const {
-  allPass, always, anyPass, both, cond, curry, equals, gt, has, is,
-  length, lt, map, match, not, pipe, prop, propEq, reduce, reduced,
-  split, T, takeLast, tap, zip
+  allPass, always, anyPass, both, complement, cond, curry, either,
+  equals, flip, gt, has, is, isEmpty, length, lt, map, match, not,
+  pipe, prop, propEq, reduce, reduced, split, T, takeLast, tap, zip
 } = require('ramda');
 
 const rules = require('./rules.js');
@@ -25,15 +25,14 @@ const matchPatternsToPath = curry((patterns, path) => patterns.length === path.l
   }, true),
 )(patterns, path));
 
-const isNonEmptyList = both(is(Array), pipe(length, lt(0)));
-
 const atPath = path => (config, currentPath) => equals(path, currentPath);
 const pathEndsWith = path => (config, currentPath) => endsWith(path, currentPath);
 const hasPath = path => config => !!pathOr(false, path, config);
 const matchPath = patterns => (config, path) => matchPatternsToPath(patterns, path);
 const pathEndsWithMatch = patterns => (config, path) => matchPatternsToPath(patterns, takeLast(patterns.length, path));
-const hasProps = props => config => map(flip(has)(config), props);
-const propIsNonEmptyList = prop => config => both(has(prop, config), isNonEmptyList(prop));
+const hasProps = props => allPass(map(has, props));
+const propEmpty = propName => pipe(prop(propName), isEmpty);
+const propNotEmpty = complement(propEmpty);
 
 const backendExists = rules.error({
   name: 'backendExists',
@@ -111,22 +110,52 @@ const collectionHasRequiredProps = rules.error({
   success: always(`Collection has required settings: ${requiredCollectionProps.join(", ")}.`),
 });
 
+const isCollectionDefinition = matchPath(['collections', '*']);
 
 const collectionIsFolderOrFilesCollection = rules.error({
   name: 'collectionIsFolderOrFilesCollection',
   match: matchPath(['collections', '*']),
   test: anyPass([
-    both(has('files')),
-    both(has('folder'), has('fields')),
+    pipe(prop('files'), complement(isEmpty)),
+    allPass([
+      has('folder'),
+      propNotEmpty('fields'),
+    ]),
+    complement(hasProps(['files', 'folder'])),
   ]),
-  failure: always('Collection should either have "folder" and "fields" settings or have a "files" setting!'),
+  failure: cond([
+    [complement(either(has('files'), has('folder'))),
+      always('Collection has no "files" or "folder" setting!')],
+    [both(has('folder'), has('files')),
+      always('Collection should only have one of "files" or "folder" set.')],
+    [both(has('files'), isEmpty('files')),
+      always('Collection has an empty "files" list!')],
+    [both(has('folder'), complement(has('fields'))),
+      always('Collection has a "folder" setting but no "fields" array!')],
+    [T, always("ERROR")],
+  ]) ,
   success: cond([
-    [o => has('folder'), always("Collection is a folder-based collection.")],
-    [o => has('files'), always("Collection is a files-based collection.")],
+    [has('folder'), always("Collection is a folder-based collection.")],
+    [has('files'), always("Collection is a files-based collection.")],
+    [T, always('wtf')],
   ]),
 });
 
-const isFieldDefinition = test.pathEndsWithMatch(['fields', '*']);
+const isFileDefinition = pathEndsWithMatch(['files', '*']);
+
+const requiredFileProps = ['name', 'label', 'file', 'fields', 'description'];
+const fileDefinitionHasRequiredProps = rules.error({
+  name: 'fileDefinitionHasRequiredProps',
+  match: isFileDefinition,
+  test: hasProps(requiredFileProps),
+  failure: o => {
+    const unsetFileProps = filter(flip(has)(o), requiredFileProps);
+    return `File definition is missing required props: ${unsetFileProps.join(', ')}`;
+  },
+  success: always(`File definition has required props: ${requiredFileProps.join(', ')}`)
+});
+
+const isFieldDefinition = pathEndsWithMatch(['fields', '*']);
 
 const requiredFieldProps = ['name', 'label', 'widget'];
 const fieldHasRequiredProps = rules.error({
@@ -159,6 +188,7 @@ module.exports = [
   hasAtLeastOneCollection,
   collectionHasRequiredProps,
   collectionIsFolderOrFilesCollection,
+  fileDefinitionHasRequiredProps,
   fieldHasRequiredProps,
   selectWidgetHasOptions,
 ];
