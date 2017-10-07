@@ -1,0 +1,6 @@
+backend:
+  name: github
+  repo: benaiah/cms-user-testing
+  
+collections:
+  - name: "first-collection"
